@@ -522,54 +522,36 @@ Copyright (c)2015 Intel Corporation
         var pixels = ctx.getImageData(0, 0, w, h)
           , data   = pixels.data
           , len    = data.length
-          , total  = len / 4
-          , hist   = new Int32Array(256)
-          , min    = 255
-          , max    = 0
-          , val,  pcnt
+          , hist   = new Float32Array(256)
           , norm, prev
-          , i, j;
+          , i, j, sum = 0;
 
-        // get min/max depth values
         for (i = 0; i < len; i += 4) {
-          ++hist[val = data[i]];
-          if (val > max) {max = val;}
-          if (val < min) {min = val;}
+          ++hist[~~data[i]];
+          ++sum;
         }
-        // discard min/max outliers
-        for (i = min; i < max; i++) {
-          pcnt = hist[i] / total * 100;
-          if (depthThresh <= pcnt) {break;}
+
+        // Compute integral histogram:
+        prev = hist[0];
+        for (i = 1; i < 256; ++i) {
+          prev = hist[i] += prev;
         }
-        for (j = max; j > min; j--) {
-          pcnt = hist[j] / total * 100;
-          if (depthThresh <= pcnt) {break;}
-        }
-        if (0 < j - i) {
-          min = i; max = j;
-        }
-        var spread = 255 / (max - min + 1);
+
+        // Equalize image:
+        norm = 255 / sum;
         for (i = 0; i < len; i += 4) {
-          if (prev !== (val = data[i])) {
-            prev = val;
-            val  = Math.max(0, Math.min(val, max) - min);
-            norm = Math.round(val * spread + (bias|0));
-            norm = Math.max(1, Math.min(255, norm));
-          }
-          // modify R,G,B not alpha
-          for (j = 0; j < 3; j++) {
-            data[i + j] = norm;
+          data[i] = hist[~~data[i]] * norm * 0.8;
+          for (j = 0; j < 4; j++) {
+            data[i + j] = data[i];
           }
         }
+
         ctx.putImageData(pixels, 0, 0);
         depth.data = canvas.toDataURL();
         depth._normalized = true;
         return depth.data;
       });
   };
-  // min percent of total depthmap pixels
-  // for determining min/max depth values
-  var depthThresh = 0.1;
 
   if ('object' === typeof exports) {
     module.exports   = DepthReader;
